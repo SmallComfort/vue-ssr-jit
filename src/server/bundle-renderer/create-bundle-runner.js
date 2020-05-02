@@ -68,6 +68,12 @@ function compileModule (files, basedir, runInNewContext) {
     const res = Object.prototype.hasOwnProperty.call(m.exports, 'default')
       ? m.exports.default
       : m.exports
+    /**
+     * 如果导出了 base 基础实例，则将基础实例挂载到 res，用于日后的 diff 推导
+     */
+    if (m.exports.base) {
+      res.base = m.exports.base
+    }
     evaluatedFiles[filename] = res
     return res
   }
@@ -97,7 +103,7 @@ export function createBundleRunner (entry, files, basedir, runInNewContext) {
     return (userContext = {}) => new Promise(resolve => {
       userContext._registeredComponents = new Set()
       const res = evaluate(entry, createSandbox(userContext))
-      resolve(typeof res === 'function' ? res(userContext) : res)
+      resolve(res)
     })
   } else {
     // direct mode: instead of re-evaluating the whole bundle on
@@ -143,8 +149,7 @@ export function createBundleRunner (entry, files, basedir, runInNewContext) {
           })
         }
       }
-
-      resolve(runner(userContext))
+      resolve(runner)
     })
   }
 }

@@ -127,3 +127,23 @@ export function renderMixin (Vue: Class<Component>) {
     return vnode
   }
 }
+
+export function ssrRender(vm) {
+  const { render, _parentVnode } = vm.$options
+
+  if (_parentVnode) {
+    vm.$scopedSlots = normalizeScopedSlots(
+      _parentVnode.data.scopedSlots,
+      vm.$slots,
+      vm.$scopedSlots
+    )
+  }
+
+  // set parent vnode. this allows render functions to have access
+  // to the data on the placeholder node.
+  vm.$vnode = _parentVnode
+  // render self
+  const vnode = render.call(vm._renderProxy, vm.$createElement)
+
+  return vnode
+}

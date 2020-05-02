@@ -210,6 +210,26 @@ const builds = {
     dest: resolve('packages/weex-template-compiler/build.js'),
     format: 'cjs',
     external: Object.keys(require('../packages/weex-template-compiler/package.json').dependencies)
+  },
+  "vue-ssr-jit-dev": {
+    entry: resolve("web/entry-server-renderer-jit.js"),
+    dest: resolve("packages/vue-ssr-jit/build.dev.js"),
+    format: "cjs",
+    env: "development",
+    external: Object.keys(
+      require("../packages/vue-ssr-jit/package.json").dependencies
+    ),
+    plugins: [node(), cjs()]
+  },
+  "vue-ssr-jit-prod": {
+    entry: resolve("web/entry-server-renderer-jit.js"),
+    dest: resolve("packages/vue-ssr-jit/build.prod.js"),
+    format: "cjs",
+    env: 'production',
+    external: Object.keys(
+      require("../packages/vue-ssr-jit/package.json").dependencies
+    ),
+    plugins: [node(), cjs()]
   }
 }
 

@@ -9,6 +9,7 @@ import { ssrCompileToFunctions } from 'web/server/compiler'
 import { installSSRHelpers } from './optimizing-compiler/runtime-helpers'
 
 import { isDef, isUndef, isTrue } from 'shared/util'
+import { renderStyles } from './util'
 
 import {
   createComponent,
@@ -71,17 +72,21 @@ function waitForServerPrefetch (vm, resolve, reject) {
   resolve()
 }
 
-function renderNode (node, isRoot, context) {
+function renderNode (node, isRoot, context, renderTree) {
   if (node.isString) {
-    renderStringNode(node, context)
+    renderStringNode(node, context, renderTree)
   } else if (isDef(node.componentOptions)) {
-    renderComponent(node, isRoot, context)
+    let _renderTree = null
+    if (renderTree && renderTree.children) {
+      _renderTree = renderTree.children.shift()
+    }
+    renderComponent(node, isRoot, context, _renderTree)
   } else if (isDef(node.tag)) {
-    renderElement(node, isRoot, context)
+    renderElement(node, isRoot, context, renderTree)
   } else if (isTrue(node.isComment)) {
     if (isDef(node.asyncFactory)) {
       // async component
-      renderAsyncComponent(node, isRoot, context)
+      renderAsyncComponent(node, isRoot, context, renderTree)
     } else {
       context.write(`<!--${node.text}-->`, context.next)
     }
@@ -103,7 +108,7 @@ function registerComponentForCache (options, write) {
   return register
 }
 
-function renderComponent (node, isRoot, context) {
+function renderComponent (node, isRoot, context, renderTree) {
   const { write, next, userContext } = context
 
   // check cache hit
@@ -116,7 +121,7 @@ function renderComponent (node, isRoot, context) {
   if (isDef(getKey) && isDef(cache) && isDef(name)) {
     const rawKey = getKey(node.componentOptions.propsData)
     if (rawKey === false) {
-      renderComponentInner(node, isRoot, context)
+      renderComponentInner(node, isRoot, context, renderTree)
       return
     }
     const key = name + '::' + rawKey
@@ -132,7 +137,7 @@ function renderComponent (node, isRoot, context) {
             write(res.html, next)
           })
         } else {
-          renderComponentWithCache(node, isRoot, key, context)
+          renderComponentWithCache(node, isRoot, key, context, renderTree)
         }
       })
     } else if (isDef(get)) {
@@ -144,7 +149,7 @@ function renderComponent (node, isRoot, context) {
           res.components.forEach(register => register(userContext))
           write(res.html, next)
         } else {
-          renderComponentWithCache(node, isRoot, key, context)
+          renderComponentWithCache(node, isRoot, key, context, renderTree)
         }
       })
     }
@@ -163,11 +168,11 @@ function renderComponent (node, isRoot, context) {
         `must also define a unique "name" option.`
       )
     }
-    renderComponentInner(node, isRoot, context)
+    renderComponentInner(node, isRoot, context, renderTree)
   }
 }
 
-function renderComponentWithCache (node, isRoot, key, context) {
+function renderComponentWithCache (node, isRoot, key, context, renderTree) {
   const write = context.write
   write.caching = true
   const buffer = write.cacheBuffer
@@ -181,10 +186,16 @@ function renderComponentWithCache (node, isRoot, key, context) {
     bufferIndex,
     componentBuffer
   })
-  renderComponentInner(node, isRoot, context)
+  renderComponentInner(node, isRoot, context, renderTree)
 }
 
-function renderComponentInner (node, isRoot, context) {
+function renderComponentInner (node, isRoot, context, renderTree) {
+  if (renderTree && renderTree.static === true) {
+    context.userContext._styles = Object.assign(context.userContext._styles || {}, renderTree.styles)
+    context.write(renderTree.render(), context.next)
+    return
+  }
+
   const prevActive = context.activeInstance
   // expose userContext on vnode
   node.ssrContext = context.userContext
@@ -194,6 +205,11 @@ function renderComponentInner (node, isRoot, context) {
   )
   normalizeRender(child)
 
+  if (renderTree && renderTree.render) {
+    child.$options.render = renderTree.render
+    context.userContext._styles = Object.assign(context.userContext._styles || {}, renderTree.styles)
+  }
+
   const resolve = () => {
     const childNode = child._render()
     childNode.parent = node
@@ -201,7 +217,7 @@ function renderComponentInner (node, isRoot, context) {
       type: 'Component',
       prevActive
     })
-    renderNode(childNode, isRoot, context)
+    renderNode(childNode, isRoot, context, renderTree)
   }
 
   const reject = context.done
@@ -209,7 +225,7 @@ function renderComponentInner (node, isRoot, context) {
   waitForServerPrefetch(child, resolve, reject)
 }
 
-function renderAsyncComponent (node, isRoot, context) {
+function renderAsyncComponent (node, isRoot, context, renderTree) {
   const factory = node.asyncFactory
 
   const resolve = comp => {
@@ -228,17 +244,22 @@ function renderAsyncComponent (node, isRoot, context) {
     if (resolvedNode) {
       if (resolvedNode.componentOptions) {
         // normal component
-        renderComponent(resolvedNode, isRoot, context)
+        let _renderTree = null
+        if (renderTree && renderTree.children) {
+          _renderTree = renderTree.children.shift()
+        }
+        renderComponent(resolvedNode, isRoot, context, _renderTree)
       } else if (!Array.isArray(resolvedNode)) {
         // single return node from functional component
-        renderNode(resolvedNode, isRoot, context)
+        renderNode(resolvedNode, isRoot, context, renderTree)
       } else {
         // multiple return nodes from functional component
         context.renderStates.push({
           type: 'Fragment',
           children: resolvedNode,
           rendered: 0,
-          total: resolvedNode.length
+          total: resolvedNode.length,
+          renderTree
         })
         context.next()
       }
@@ -274,7 +295,7 @@ function renderAsyncComponent (node, isRoot, context) {
   }
 }
 
-function renderStringNode (el, context) {
+function renderStringNode (el, context, renderTree) {
   const { write, next } = context
   if (isUndef(el.children) || el.children.length === 0) {
     write(el.open + (el.close || ''), next)
@@ -285,13 +306,14 @@ function renderStringNode (el, context) {
       children,
       rendered: 0,
       total: children.length,
-      endTag: el.close
+      endTag: el.close,
+      renderTree
     })
     write(el.open, next)
   }
 }
 
-function renderElement (el, isRoot, context) {
+function renderElement (el, isRoot, context, renderTree) {
   const { write, next } = context
 
   if (isTrue(isRoot)) {
@@ -317,7 +339,8 @@ function renderElement (el, isRoot, context) {
       children,
       rendered: 0,
       total: children.length,
-      endTag
+      endTag,
+      renderTree
     })
     write(startTag, next)
   }
@@ -418,6 +441,18 @@ export function createRenderFunction (
     userContext: ?Object,
     done: Function
   ) {
+
+    const renderTree = userContext.ssrRenderTree
+    if (renderTree && renderTree.static === true) {
+      if (userContext.styles === undefined) {
+        userContext.styles = renderStyles(renderTree.styles)
+      } else {
+        userContext._styles = Object.assign(userContext._styles || {}, renderTree.styles)
+      }
+      write(renderTree.render(), done)
+      return
+    }
+
     warned = Object.create(null)
     const context = new RenderContext({
       activeInstance: component,
@@ -430,7 +465,11 @@ export function createRenderFunction (
     normalizeRender(component)
 
     const resolve = () => {
-      renderNode(component._render(), true, context)
+      const render = renderTree.render
+      if (render) {
+        component.$options.render = render
+      }
+      renderNode(component._render(), true, context, renderTree)
     }
     waitForServerPrefetch(component, resolve, done)
   }

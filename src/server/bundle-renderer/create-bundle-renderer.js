@@ -4,6 +4,8 @@ import { createPromiseCallback } from '../util'
 import { createBundleRunner } from './create-bundle-runner'
 import type { Renderer, RenderOptions } from '../create-renderer'
 import { createSourceMapConsumers, rewriteErrorTrace } from './source-map-support'
+import { createPatchFunction } from "server/patch";
+import { extend } from 'shared/util'
 
 const fs = require('fs')
 const path = require('path')
@@ -29,12 +31,15 @@ type RenderBundle = {
 };
 
 export function createBundleRendererCreator (
-  createRenderer: (options?: RenderOptions) => Renderer
+  createRenderer: (options?: RenderOptions) => Renderer,
+  baseRenderOptions: RenderOptions
 ) {
+  const ssrRenderMap = {}
   return function createBundleRenderer (
     bundle: string | RenderBundle,
     rendererOptions?: RenderOptions = {}
   ) {
+    extend(rendererOptions, baseRenderOptions)
     let files, entry, maps
     let basedir = rendererOptions.basedir
 
@@ -85,8 +90,10 @@ export function createBundleRendererCreator (
       rendererOptions.runInNewContext
     )
 
+    const patcher = createPatchFunction(rendererOptions)
+
     return {
-      renderToString: (context?: Object, cb: any) => {
+      renderToString: (context: Object, cb: any) => {
         if (typeof context === 'function') {
           cb = context
           context = {}
@@ -100,7 +107,55 @@ export function createBundleRendererCreator (
         run(context).catch(err => {
           rewriteErrorTrace(err, maps)
           cb(err)
-        }).then(app => {
+        })
+        .then(runner => {
+          const base = runner.base || runner
+          const url = context.url || "";
+          const ssrRenderUrl = Object.keys(ssrRenderMap)
+            .filter(v => ssrRenderMap[v].regex.test(url))[0]
+          const ssrRenderTree = ssrRenderMap[ssrRenderUrl] && ssrRenderMap[ssrRenderUrl].tree
+
+          if (!ssrRenderTree) {
+            return new Promise(resolve => {
+              Promise.all([base(context), runner(context)]).then(res => {
+                let ssrRender = {}
+                if (res[0].$route && res[0].$route.matched[0]) {
+                  const match = res[0].$route.matched[0];
+                  if (!ssrRenderMap[match.path]) {
+                    ssrRender = {
+                      regex: match.regex
+                    }
+                    ssrRenderMap[match.path] = ssrRender
+                  }
+                } else if (url) {
+                  if (!ssrRenderMap[url]) {
+                    ssrRender = {
+                      regex: new RegExp(url)
+                    }
+                    ssrRenderMap[url] = ssrRender
+                  }
+                }
+
+                const done = function(e) {
+                  if (e && e.success) {
+                    context.ssrRenderTree = e.ssrRenderTree
+                    ssrRender.tree = e.ssrRenderTree
+                    resolve(res[1])
+                  } else {
+                    rewriteErrorTrace(e, maps)
+                    cb(e)
+                  }
+                }
+                patcher(res[0], res[1], context, done)
+              })
+            })
+          } else {
+            context.ssrRenderTree = ssrRenderTree
+            console.log('use vue ssr jit')
+            return runner(context)
+          }
+        })
+        .then(app => {
           if (app) {
             renderer.renderToString(app, context, (err, res) => {
               rewriteErrorTrace(err, maps)

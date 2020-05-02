@@ -79,7 +79,7 @@ export class RenderContext {
           const { children, total } = lastState
           const rendered = lastState.rendered++
           if (rendered < total) {
-            return this.renderNode(children[rendered], false, this)
+            return this.renderNode(children[rendered], false, this, lastState.renderTree)
           } else {
             this.renderStates.pop()
             if (lastState.type === 'Element') {
