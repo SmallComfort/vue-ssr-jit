@@ -116,6 +116,7 @@ export function createBundleRendererCreator (
           const ssrRenderTree = ssrRenderMap[ssrRenderUrl] && ssrRenderMap[ssrRenderUrl].tree
 
           if (!ssrRenderTree) {
+            console.log('start parse ssr render')
             return new Promise(resolve => {
               Promise.all([base(context), runner(context)]).then(res => {
                 let ssrRender = {}
@@ -140,6 +141,9 @@ export function createBundleRendererCreator (
                   if (e && e.success) {
                     context.ssrRenderTree = e.ssrRenderTree
                     ssrRender.tree = e.ssrRenderTree
+                    if (process.env.NODE_ENV !== 'production') {
+                      console.log('new ssrRenderTree: ', e.ssrRenderTree)
+                    }
                     resolve(res[1])
                   } else {
                     rewriteErrorTrace(e, maps)

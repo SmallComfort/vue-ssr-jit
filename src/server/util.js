@@ -6,7 +6,6 @@ import {
 } from "@babel/types";
 import traverse from "@babel/traverse";
 
-
 export const isJS = (file: string): boolean => /\.js(\?[^.]+)?$/.test(file)
 
 export const isCSS = (file: string): boolean => /\.css(\?[^.]+)?$/.test(file)
@@ -161,7 +160,7 @@ export function getVNodeRenderAst(ast) {
     noScope: true,
     ReturnStatement(path) {
       const arg = path.node.argument;
-      if (isCCallExpression(arg) || isSSRNodeCallExpression(arg) || isHCallExpression(arg)) {
+      if (isCCallExpression(arg) || isSSRNodeCallExpression(arg)) {
         vNodeAst = arg
       }
       path.stop()
@@ -218,22 +217,28 @@ export function isCCallExpression(node) {
 }
 
 /**
- * check if a call expression has name 'h'
+ * check if a call expression has name '_l'
  * match code example:
- *    h(__WEBPACK_IMPORTED_MODULE_1__App_vue__["a"])
+ *    _vm._l()
  * @param {*} node
  */
-export function isHCallExpression(node) {
+export function isLCallExpression(node) {
   if (!isCallExpression(node)) {
     return false
   }
   if (!Array.isArray(node.arguments)) {
     return false
   }
-  if (!isIdentifier(node.callee)) {
+  if (!isMemberExpression(node.callee)) {
     return false
   }
-  if (node.callee.name === 'h') {
+  if (!isIdentifier(node.callee.object)) {
+    return false
+  }
+  if (!isIdentifier(node.callee.property)) {
+    return false
+  }
+  if (node.callee.object.name === '_vm' && node.callee.property.name === '_l') {
     return true
   }
 

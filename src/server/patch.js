@@ -1,8 +1,7 @@
 /* @flow */
-
 const vm = require('vm')
 import { escape } from 'web/server/util'
-import { getVNodeAstChildren, getVNodeRenderAst } from './util'
+import { getVNodeAstChildren, getVNodeRenderAst, isLCallExpression } from './util'
 import { PatchContext } from './patch-context'
 import { resolveAsset } from 'core/util/options'
 import { generateComponentTrace } from 'core/util/debug'
@@ -10,8 +9,8 @@ import { ssrCompileToFunctions } from 'web/server/compiler'
 import { installSSRHelpers } from './optimizing-compiler/runtime-helpers'
 import type { RenderOptions } from './create-renderer'
 import { isDef, isUndef, isTrue } from 'shared/util'
-import { parse } from '@babel/parser';
-import generate from '@babel/generator';
+import { parse } from '@babel/parser'
+import generate from '@babel/generator'
 
 import {
   createComponent,
@@ -177,6 +176,7 @@ function calcuConditionalExpression(context, ast) {
 /**
  * 设置 VNode 子节点的抽象语法树
  * 对于条件判断语句，通过 VNode 上下文对其求值
+ * 如果子语法树里面有循环语句，则当前语法树和子语法树全部都置为 unMatchedAst
  * @param {VNode} node VNode 节点
  * @param {Object} ast 抽象语法树
  */
@@ -184,7 +184,17 @@ function setVNodeChildrenAst(node, ast, context) {
   const astChildren = getVNodeAstChildren(ast)
   const nodeChildren = node.children
 
-  const unMatchedAst = !astChildren || astChildren.elements.length !== nodeChildren.length
+  let unMatchedAst = !astChildren || astChildren.elements.length !== nodeChildren.length
+
+  // 如果子语法树里面有循环语句，则当前语法树和子语法树全部都置为 unMatchedAst
+  if (astChildren && Array.isArray(astChildren.elements)) {
+    astChildren.elements.forEach(node => {
+      if (isLCallExpression(node)) {
+        ast.unMatchedAst = true
+        unMatchedAst = true
+      }
+    })
+  }
 
   if (unMatchedAst === false) {
     node.children.forEach((v, i) => {
@@ -559,8 +569,13 @@ export function createPatchFunction ({
       const staticVNode = staticComponent._render()
       const dynamicVNode = dynamiComponent._render()
 
-      // todo 这里的 ast 生成是否可以更统一更严格：仅模板语法生成 ast，否则仅检测当前组件是否全静态
-      staticVNode.ast = getVNodeRenderAst(staticAst)
+      const childAst = getVNodeRenderAst(staticAst)
+      if (childAst) {
+        staticVNode.ast = childAst
+      } else {
+        staticVNode.ast = Object.assign(staticAst, { unMatchedAst: true })
+      }
+
 
       patchContext.patchStates.push({
         type: 'Component',
