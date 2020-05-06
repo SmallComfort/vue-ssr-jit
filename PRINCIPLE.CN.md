@@ -6,7 +6,7 @@
 
 提取模板中静态的 html 只需在编译期对模板结构做解析，而判断动态节点在服务端渲染阶段是否为静态，需在运行时对 VNode 做 Diff，将动态节点转化成静态 html 需要修改渲染函数的源代码，我们将这种在运行时优化服务端渲染函数的技术称作 SSR 即时编译技术（JIT）。
 
-## 如何 Diff VNode
+## JIT Diff 算法
 
 首要面对的问题是如何 Diff，完成这项工作需要两个 VNode，其中一个通过 serverPrefetch / asyncData 载入动态数据，我们称之为 Dynamic VNode，另一个未载入任何数据，我们称之为 Static VNode。我们做了一个大胆的假设，对任何用户来说，Static VNode 渲染出的 html 是一致的，并且 Static VNode 是 Dynamic VNode 的子集，不同用户的差异点在 Static VNode 相对 Dynamic VNode 的补集当中。
 

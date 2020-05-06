@@ -6,7 +6,7 @@
 
 Extracting static HTML from a Vue template only requires parsing the template structure at compile time. To determine whether a dynamic node is static during the server-side rendering phase, you need to Diff the VNode at runtime. Transforming dynamic nodes into static HTML requires modifying the source code of the rendering function, and we named this technique for optimizing server-side rendering functions at runtime the SSR Just In Time Compilation (JIT)
 
-## How to Diff VNode
+## JIT Diff algorithm
 
 The first issue is how to Diff, and to do this you need two VNodes, one that loads dynamic data via serverPrefetch / asyncData, which we call Dynamic VNode, and one that doesn't load any data, which we call Static VNode. we make the bold assumption that Static VNode renders consistent html for any user, and that Static VNode is a subset of Dynamic VNode, and the points of difference for different users are in the complement of Static VNode versus Dynamic VNode.
 
