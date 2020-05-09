@@ -149,8 +149,8 @@ function renderStartingTag (node: VNode, context: PatchContext, activeInstance: 
 }
 
 /**
- * 计算条件表达式的语法树的值
- * @param {context} context 抽象语法树的上下文
+ * Calculate the value of the conditional expression ast by injecting context
+ * @param {context} context  Ast context
  * @param {Object} ast
  */
 
@@ -174,11 +174,19 @@ function calcuConditionalExpression(context, ast) {
 }
 
 /**
- * 设置 VNode 子节点的抽象语法树
- * 对于条件判断语句，通过 VNode 上下文对其求值
- * 如果子语法树里面有循环语句，则当前语法树和子语法树全部都置为 unMatchedAst
- * @param {VNode} node VNode 节点
- * @param {Object} ast 抽象语法树
+ * English:
+ * Setting the ast of child VNodes.
+ *
+ * If ast contains a conditional expression, inject the VNode context to value the ast fragment.
+ *
+ * If ast contains a loop statement, set the current syntax tree and sub-trees all to unMatchedAst.
+ *
+ * 中文：
+ * 设置 VNode 子节点的 ast
+ * 如果 ast 中包含条件表达式，则注入 VNode 上下文对 ast 进行求值
+ * 如果 ast 中包含循环语句，则将当前语法树和子语法树全部都置为 unMatchedAst
+ * @param {VNode} node
+ * @param {Object} ast
  */
 function setVNodeChildrenAst(node, ast, context) {
   const astChildren = getVNodeAstChildren(ast)
@@ -186,7 +194,6 @@ function setVNodeChildrenAst(node, ast, context) {
 
   let unMatchedAst = !astChildren || astChildren.elements.length !== nodeChildren.length
 
-  // 如果子语法树里面有循环语句，则当前语法树和子语法树全部都置为 unMatchedAst
   if (astChildren && Array.isArray(astChildren.elements)) {
     astChildren.elements.forEach(node => {
       if (isLCallExpression(node)) {
@@ -199,7 +206,9 @@ function setVNodeChildrenAst(node, ast, context) {
   if (unMatchedAst === false) {
     node.children.forEach((v, i) => {
       let ast = astChildren.elements[i]
-      // 子语法树如果是 ConditionalExpression 类型，需要进行一次求值，获取到真正的 CallExpression
+      /**
+       * If the sub-syntax tree is of the ConditionalExpression type, it needs to be evaluated to get the true CallExpression
+       */
       if (isConditionalExpression(ast)) {
         ast = calcuConditionalExpression(context, ast)
       }
@@ -216,8 +225,26 @@ function setVNodeChildrenAst(node, ast, context) {
 }
 
 /**
- * 比较组件节点
- * 所有其他类型都经过 patchComponent 产生
+ * English:
+ * Diff Component VNode
+ *
+ * A VNode of component type is equivalent to a transit point for node traversal.
+ * Each component VNode binds the ast extracted from the render function, and the ast
+ * connected to the parent VNode.
+ *
+ * After the component node and its children have traversed, if the current component
+ * node is static, the corresponding ast in the parent node associated with it will be
+ * modified to a string.
+ *
+ * For optimization of parent-child ast see '. /patch-context.js' `PatchContext` instance
+ * method `astComponentShaking`.
+ *
+ * 中文：
+ * Diff 组件类型的节点
+ * 组件类型的 VNode 相当于节点遍历的中转站
+ * 每一个组件节点都会绑定从 render 函数中抽取出的 ast，并且连接父节点的 ast
+ * 当组件节点及其子节点遍历结束之后，如果当前组件节点为静态节点，则将与其关联的父节点中相应的 ast 修改为字符串
+ * 父子节点 ast 的优化参见 './patch-context.js' PatchContext 实例方法 astComponentShaking
  *
  * @param {VNode} staticVNode  VNode that didn't make any data requests.
  * @param {VNode} dynamicVNode  VNode populated with asynchronous data
@@ -266,9 +293,17 @@ function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
     })
 
     /**
+     * English:
+     * It is possible that the current component was not created using <template></template>
+     * template syntax.
+     *
+     * In this case, instead of ast optimization of the current component, it is determined
+     * whether the current component is completely static or, if so, the entire component is
+     * statically optimized
+     *
+     * 中文：
      * 当前组件有可能不是通过 <template></template> 模板语法创建
-     * 这种情况不对当前组件做语法树节点级别的优化
-     * 转而判断当前组件是否完全是静态组件，如果是，则对整个组件做静态优化
+     * 这种情况不对当前组件做 ast 优化，而是判断当前组件是否完全是静态组件，如果是，则对整个组件做静态优化
      */
     const childAst = getVNodeRenderAst(staticAst)
     if (childAst) {
@@ -285,7 +320,15 @@ function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
 }
 
 /**
- * 比较异步组件
+ * English:
+ * Diff Async Component VNode
+ *
+ * Diff for asynchronous components is more complex and it is recommended to refer to '. /render.js'
+ * for renderAsyncComponent handling of individual asynchronous components
+ *
+ * 中文：
+ * Diff 异步组件类型的节点
+ * 异步组件的 Diff 比较复杂，建议参考 './render.js' 中 renderAsyncComponent 对单个异步组件的处理
  *
  * @param {VNode} staticVNode  VNode that didn't make any data requests.
  * @param {VNode} dynamicVNode  VNode populated with asynchronous data
@@ -360,7 +403,7 @@ function patchAsyncComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
         resolve(res[0], res[1])
       }).catch(reject)
       return
-    } 
+    }
     const staticComponent = staticRes.component
     const dynamicComponent = dynamicRes.component
     if (typeof staticComponent.then === 'function' && typeof dynamicComponent.then === 'function') {
@@ -389,7 +432,13 @@ function getResolevdNode(node, comp) {
 }
 
 /**
- * 比较字符串型节点，这种节点为 ssr 特有，是模板编译器的一种渲染优化
+ * English:
+ * Diff string type VNode
+ * This node is SSR-specific and is a rendering optimization for the template compiler
+ *
+ * 中文：
+ * Diff 字符串类型节点
+ * 这种节点为 ssr 特有，是模板编译器的一种渲染优化
  *
  * @param {VNode} staticVNode  VNode that didn't make any data requests.
  * @param {VNode} dynamicVNode  VNode populated with asynchronous data
@@ -424,7 +473,14 @@ function patchStringNode(staticVNode, dynamicVNode, patchContext) {
 }
 
 /**
- * 比较元素节点
+ * English:
+ * Diff element type VNode
+ * Note that if a node of an element type has children, it needs to bind the corresponding ast
+ * for the children, which is implemented in setVNodeChildrenAst
+ *
+ * 中文：
+ * Diff 元素类型节点
+ * 注意如果元素类型的节点有子节点，需要为子节点绑定相应的 ast，具体逻辑实现在 setVNodeChildrenAst 里面
  *
  * @param {VNode} staticVNode  VNode that didn't make any data requests.
  * @param {VNode} dynamicVNode  VNode populated with asynchronous data
@@ -440,7 +496,7 @@ function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
     if (!dynamicVNode.data.attrs) dynamicVNode.data.attrs = {}
     dynamicVNode.data.attrs[SSR_ATTR] = 'true'
   }
-  
+
   const ast = staticVNode.ast
   const staticStartTag = renderStartingTag(staticVNode, patchContext, patchContext.staticActiveInstance)
   const dynamicStartTag = renderStartingTag(dynamicVNode, patchContext, patchContext.dynamicActiveInstance)
@@ -476,7 +532,15 @@ function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
 }
 
 /**
- * 对比虚拟 dom ，收集静态节点与动态节点
+ * English:
+ * Diff VNode
+ * This function is continuously executed during the node iterations and is used to collect static nodes.
+ * The traversal algorithm here is structurally consistent with the official renderNode function, see '. /render.js'
+ *
+ * 中文：
+ * Diff VNode
+ * 此函数在节点遍历过程中会被不断执行，用于收集静态节点
+ * 这里的遍历算法与官方 renderNode 函数在结构上保持一致，参见 './render.js'
  *
  * @param {VNode} staticVNode  VNode that didn't make any data requests.
  * @param {VNode} dynamicVNode  VNode populated with asynchronous data
@@ -528,14 +592,34 @@ export function createPatchFunction ({
   cache
 }: RenderOptions) {
   /**
+   * English：
+   * Diff entry
+   *
+   * If the node is detected to be static, modify the corresponding ast fragment of the staticAst.
+   *
+   * We have added some additional properties to ast to assist in determining whether the current
+   * node is legitimate, or whether it is a static node.
+   * Additional attributes were added as follows:
+   *    ast.ssrString && ast.ssrString ! == ''
+   *      The current node is a static node, note that this does not mean that the child nodes are static
+   *    ast.ssrStatic === true
+   *      The current nodes and child nodes are static nodes.
+   *    ast.unMatchedAst === true
+   *      The current VNode does not match to ast, which is only optimized when the current node and child nodes are all static.
+   *
    * 中文：
-   * VNode diff
-   * 如果检测到节点是静态的，修改的是静态组件的 ast (staticAst)
-   * 如果检测到节点是动态的
-   * staticAst 不做任何网络请求
-   * ast.ssrString 如果有值，则表示当前节点是静态节点，但不一定表示子节点是静态节点
-   * ast.ssrStatic === true，表示当前节点和子节点都是静态节点
-   * ast.unMatchedAst === true，表示当前节点没有匹配到抽象语法树，这种情况只有当节点和子节点全部都为静态，才做优化
+   * Diff entry
+   *
+   * 如果检测到节点是静态的，则修改 staticAst 相应的节点片段
+   *
+   * 我们为 ast 添加了一些额外的属性，用于辅助判断当前节点是否合法，或者是否属于静态节点
+   * 额外添加的属性如下：
+   *    ast.ssrString && ast.ssrString ! == ''
+   *      当前节点是静态节点，注意这并不意味着子节点是静态节点
+   *    ast.ssrStatic === true
+   *      当前节点和子节点都是静态节点
+   *    ast.unMatchedAst === true
+   *      当前节点没有匹配到 ast，这种情况只有当前节点和子节点全部都为静态时，才做优化
    */
   return function patcher (
     staticComponent: Component,
