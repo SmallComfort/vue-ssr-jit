@@ -9,12 +9,6 @@ import {
 import generate from '@babel/generator'
 import { ssrRender } from 'core/instance/render'
 
-/**
- * ast.ssrString 如果有值，则表示当前节点是静态节点，但不一定表示子节点是静态节点
- * ast.ssrStatic === true，表示当前节点和子节点都是静态节点
- * ast.unMatchedAst === true，表示当前节点没有匹配到抽象语法树，这种情况只有当节点和子节点全部都为静态，才做优化
- */
-
 type PatchState = {
   type: 'Element';
   rendered: number;

@@ -24,9 +24,18 @@ export function createPromiseCallback () {
 }
 
 /**
- * 获取抽象语法树中创造 VNode 的函数参数中的数组参数，数组参数里定义了子节点的渲染函数
- * 用处：当对比得出当前节点为静态节点，则删除当前节点，提升子节点
- * @param {Ast} ast 抽象语法树
+ * Engligh:
+ * Get the array of parameters in the function argument, which defines the rendering function for the child node
+ * 
+ * 中文：
+ * 获取 ast 中生成 VNode 的函数参数中的数组参数，数组参数里定义了子节点的渲染函数
+ * 
+ * Example:
+ *    source code: _c("div", [_c("router-view")], 1)
+ *    
+ *    return [_c("router-view")]
+ * 
+ * @param {Object} ast
  */
 export function getVNodeAstChildren(ast) {
   let children = null
@@ -34,15 +43,23 @@ export function getVNodeAstChildren(ast) {
     try {
       children = ast.arguments.filter(v => v.type === 'ArrayExpression')[0]
     } catch(e) {
-      console.error('获取虚拟 dom 子元素失败，请查看 ast', ast)
+      console.error('To get the virtual DOM sub-element failed, see AST', ast)
     }
   }
   return children
 }
 
 /**
- * 当前节点是否是 ssrNode 函数节点
- * @param {Ast} ast 抽象语法树
+ * English:
+ * Detects if the ast fragment is an ssrNode function node.
+ * 
+ * 中文：
+ * 检测 ast 片段是否是 ssrNode 函数节点。
+ * 
+ * Example:
+ *    _vm._ssrNode("<div>vue-ssr-jit</div>")
+ * 
+ * @param {Object} ast
  */
 export function isSSRNodeAst(ast) {
   return ast && isCallExpression(ast) &&
@@ -51,6 +68,15 @@ export function isSSRNodeAst(ast) {
     ast.callee.property.name === '_ssrNode'
 }
 
+/**
+ * English：
+ * Recursively obtain the leftmost string in a string splicing expression
+ * 
+ * 中文：
+ * 递归获取字符串拼接表达式中最左边的字符串
+ * 
+ * @param {Object} ast 
+ */
 export function getLeftStringLiteral(ast) {
   if (isBinaryExpression(ast)) {
     return getLeftStringLiteral(ast.left)
@@ -59,6 +85,15 @@ export function getLeftStringLiteral(ast) {
   }
 }
 
+/**
+ * English：
+ * Recursively obtain the rightmost string in a string splicing expression
+ * 
+ * 中文：
+ * 递归获取字符串拼接表达式中最右边的字符串
+ * 
+ * @param {Object} ast 
+ */
 export function getRightStringLiteral(ast) {
   if (isBinaryExpression(ast)) {
     return getRightStringLiteral(ast.right)
@@ -68,68 +103,43 @@ export function getRightStringLiteral(ast) {
 }
 
 /**
- * 优化过的加法表达式，相邻的字符串类型直接进行字符拼接，不需要加法拼接
+ * English:
+ * Optimized string splicing expressions, where adjacent string types are merged directly into a single string, no splicing required
+ * 
+ * 中文：
+ * 优化过的字符串拼接表达式，相邻的字符串类型直接合并成一个字符串，不需要拼接
+ * 
+ * Example:
+ *    'a' + 'b' --> 'ab'
+ *    'a' + 'b' + c --> 'ab' + c
+ *    a + 'b' + 'c' --> a + 'bc'
  */
 export function binaryExpressionPlus(left, right) {
-  // 两个都是纯字符串，直接做字符串拼接
   if (isStringLiteral(left) && isStringLiteral(right)) {
     return stringLiteral(left.value + right.value)
   }
-  // 左边是纯字符串，右边是表达式
   else if (isStringLiteral(left) && isBinaryExpression(right)) {
     const mostLeft = getLeftStringLiteral(right)
     mostLeft.value = left.value + mostLeft.value
     return right
   }
-  // 左边是表达式，右边是纯字符串
   else if (isBinaryExpression(left) && isStringLiteral(right)) {
     const mostRight = getRightStringLiteral(left)
     mostRight.value = mostRight.value + right.value
     return left
   }
-  // 两边都是表达式
   else {
     return binaryExpression('+', left, right)
   }
 }
 
 /**
- * 判断当前节点是否是静态节点
- * @param {Object} ast
- * todo 要重构了，条件判断分支混乱，分不清了
- */
-export function isStaticSSRNode(ast) {
-  if (isCallExpression(ast)) {
-    if (ast.ssrString) {
-      return true;
-    }
-  }
-  return false
-}
-
-/**
- * 获取 ast 语法树的子节点的静态节点
- * 如果子节点不是静态节点，则返回 ''
- * @param {Object} ast
- */
-export function getStaticAstChildValue(ast) {
-  let value = ''
-  const children = getVNodeAstChildren(ast)
-  if (children && children.elements.length === 1 &&
-    children.elements[0].ssrRenderAst === undefined) {
-    if (children.elements[0].arguments &&
-      children.elements[0].arguments.length === 1) {
-        const node = children.elements[0].arguments[0]
-        if (isStringLiteral(node)) {
-          value = node.value
-        }
-    }
-  }
-  return value
-}
-
-/**
- * 检测组件的抽象语法树是否是静态的
+ * English:
+ * Returns the value of the node if the ast fragment is confirmed as a static node by diff, otherwise returns ''
+ * 
+ * 中文：
+ * 如果 ast 片段经过 diff 确认是静态节点，则返回节点的值，否则返回 ''
+ * 
  * @param {Object} ast
  */
 export function getStatisAstComponentValue(ast: Object) {
@@ -150,9 +160,20 @@ export function getStatisAstComponentValue(ast: Object) {
 }
 
 /**
- * 获取抽象语法树中创造 VNode 的函数节点
- * 注意只有被添加了 ssrKey 的节点才可做后续的优化
- * @param {Ast} ast 抽象语法树
+ * English:
+ * Get function call expression for generating VNode in ast fragment
+ * 
+ * 中文：
+ * 获取 ast 片段中生成 VNode 的函数调用表达式
+ * 
+ * Example:
+ *  function render() {
+ *    return _c('div')
+ *  }
+ * 
+ *  --->  _c('div')
+ * 
+ * @param {Object} ast
  */
 export function getVNodeRenderAst(ast) {
   let vNodeAst
@@ -170,11 +191,16 @@ export function getVNodeRenderAst(ast) {
 }
 
 /**
- * check if a call expression named ssrNode
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _ssrNode
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _ssrNode
+ * 
+ * Example:
  *    vm._ssrNode('<div id="xx"/>')
- * @param {*} node
- * @param {*} node
+ * 
+ * @param {Object} node ast
  */
 function isSSRNodeCallExpression(node) {
   if (!isCallExpression(node)) {
@@ -194,8 +220,13 @@ function isSSRNodeCallExpression(node) {
 }
 
 /**
- * check if a call expression has name '_c'
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _c
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _c
+ * 
+ * Example:
  *    _c("div", [_vm._v("8")])
  * @param {*} node
  */
@@ -217,8 +248,13 @@ export function isCCallExpression(node) {
 }
 
 /**
- * check if a call expression has name '_l'
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _c
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _c
+ * 
+ * Example:
  *    _vm._l()
  * @param {*} node
  */

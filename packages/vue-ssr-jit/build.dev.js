@@ -6593,9 +6593,18 @@ function createPromiseCallback () {
 }
 
 /**
- * 获取抽象语法树中创造 VNode 的函数参数中的数组参数，数组参数里定义了子节点的渲染函数
- * 用处：当对比得出当前节点为静态节点，则删除当前节点，提升子节点
- * @param {Ast} ast 抽象语法树
+ * Engligh:
+ * Get the array of parameters in the function argument, which defines the rendering function for the child node
+ * 
+ * 中文：
+ * 获取 ast 中生成 VNode 的函数参数中的数组参数，数组参数里定义了子节点的渲染函数
+ * 
+ * Example:
+ *    source code: _c("div", [_c("router-view")], 1)
+ *    
+ *    return [_c("router-view")]
+ * 
+ * @param {Object} ast
  */
 function getVNodeAstChildren(ast) {
   var children = null;
@@ -6603,15 +6612,23 @@ function getVNodeAstChildren(ast) {
     try {
       children = ast.arguments.filter(function (v) { return v.type === 'ArrayExpression'; })[0];
     } catch(e) {
-      console.error('获取虚拟 dom 子元素失败，请查看 ast', ast);
+      console.error('To get the virtual DOM sub-element failed, see AST', ast);
     }
   }
   return children
 }
 
 /**
- * 当前节点是否是 ssrNode 函数节点
- * @param {Ast} ast 抽象语法树
+ * English:
+ * Detects if the ast fragment is an ssrNode function node.
+ * 
+ * 中文：
+ * 检测 ast 片段是否是 ssrNode 函数节点。
+ * 
+ * Example:
+ *    _vm._ssrNode("<div>vue-ssr-jit</div>")
+ * 
+ * @param {Object} ast
  */
 function isSSRNodeAst(ast) {
   return ast && types.isCallExpression(ast) &&
@@ -6620,6 +6637,15 @@ function isSSRNodeAst(ast) {
     ast.callee.property.name === '_ssrNode'
 }
 
+/**
+ * English：
+ * Recursively obtain the leftmost string in a string splicing expression
+ * 
+ * 中文：
+ * 递归获取字符串拼接表达式中最左边的字符串
+ * 
+ * @param {Object} ast 
+ */
 function getLeftStringLiteral(ast) {
   if (types.isBinaryExpression(ast)) {
     return getLeftStringLiteral(ast.left)
@@ -6628,6 +6654,15 @@ function getLeftStringLiteral(ast) {
   }
 }
 
+/**
+ * English：
+ * Recursively obtain the rightmost string in a string splicing expression
+ * 
+ * 中文：
+ * 递归获取字符串拼接表达式中最右边的字符串
+ * 
+ * @param {Object} ast 
+ */
 function getRightStringLiteral(ast) {
   if (types.isBinaryExpression(ast)) {
     return getRightStringLiteral(ast.right)
@@ -6637,33 +6672,43 @@ function getRightStringLiteral(ast) {
 }
 
 /**
- * 优化过的加法表达式，相邻的字符串类型直接进行字符拼接，不需要加法拼接
+ * English:
+ * Optimized string splicing expressions, where adjacent string types are merged directly into a single string, no splicing required
+ * 
+ * 中文：
+ * 优化过的字符串拼接表达式，相邻的字符串类型直接合并成一个字符串，不需要拼接
+ * 
+ * Example:
+ *    'a' + 'b' --> 'ab'
+ *    'a' + 'b' + c --> 'ab' + c
+ *    a + 'b' + 'c' --> a + 'bc'
  */
 function binaryExpressionPlus(left, right) {
-  // 两个都是纯字符串，直接做字符串拼接
   if (types.isStringLiteral(left) && types.isStringLiteral(right)) {
     return types.stringLiteral(left.value + right.value)
   }
-  // 左边是纯字符串，右边是表达式
   else if (types.isStringLiteral(left) && types.isBinaryExpression(right)) {
     var mostLeft = getLeftStringLiteral(right);
     mostLeft.value = left.value + mostLeft.value;
     return right
   }
-  // 左边是表达式，右边是纯字符串
   else if (types.isBinaryExpression(left) && types.isStringLiteral(right)) {
     var mostRight = getRightStringLiteral(left);
     mostRight.value = mostRight.value + right.value;
     return left
   }
-  // 两边都是表达式
   else {
     return types.binaryExpression('+', left, right)
   }
 }
 
 /**
- * 检测组件的抽象语法树是否是静态的
+ * English:
+ * Returns the value of the node if the ast fragment is confirmed as a static node by diff, otherwise returns ''
+ * 
+ * 中文：
+ * 如果 ast 片段经过 diff 确认是静态节点，则返回节点的值，否则返回 ''
+ * 
  * @param {Object} ast
  */
 function getStatisAstComponentValue(ast) {
@@ -6684,9 +6729,20 @@ function getStatisAstComponentValue(ast) {
 }
 
 /**
- * 获取抽象语法树中创造 VNode 的函数节点
- * 注意只有被添加了 ssrKey 的节点才可做后续的优化
- * @param {Ast} ast 抽象语法树
+ * English:
+ * Get function call expression for generating VNode in ast fragment
+ * 
+ * 中文：
+ * 获取 ast 片段中生成 VNode 的函数调用表达式
+ * 
+ * Example:
+ *  function render() {
+ *    return _c('div')
+ *  }
+ * 
+ *  --->  _c('div')
+ * 
+ * @param {Object} ast
  */
 function getVNodeRenderAst(ast) {
   var vNodeAst;
@@ -6704,11 +6760,16 @@ function getVNodeRenderAst(ast) {
 }
 
 /**
- * check if a call expression named ssrNode
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _ssrNode
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _ssrNode
+ * 
+ * Example:
  *    vm._ssrNode('<div id="xx"/>')
- * @param {*} node
- * @param {*} node
+ * 
+ * @param {Object} node ast
  */
 function isSSRNodeCallExpression(node) {
   if (!types.isCallExpression(node)) {
@@ -6728,8 +6789,13 @@ function isSSRNodeCallExpression(node) {
 }
 
 /**
- * check if a call expression has name '_c'
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _c
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _c
+ * 
+ * Example:
  *    _c("div", [_vm._v("8")])
  * @param {*} node
  */
@@ -6751,8 +6817,13 @@ function isCCallExpression(node) {
 }
 
 /**
- * check if a call expression has name '_l'
- * match code example:
+ * English:
+ * Detects if the function name of the function call expression is _c
+ * 
+ * 中文：
+ * 检测函数调用表达式的函数名是否为 _c
+ * 
+ * Example:
  *    _vm._l()
  * @param {*} node
  */
@@ -9583,12 +9654,6 @@ function rewriteTraceLine (trace, mapConsumers) {
 
 /*  */
 var vm$1 = require('vm');
-
-/**
- * ast.ssrString 如果有值，则表示当前节点是静态节点，但不一定表示子节点是静态节点
- * ast.ssrStatic === true，表示当前节点和子节点都是静态节点
- * ast.unMatchedAst === true，表示当前节点没有匹配到抽象语法树，这种情况只有当节点和子节点全部都为静态，才做优化
- */
 
 
 
@@ -22850,7 +22915,7 @@ function getParserClass(pluginsFromOptions) {
 exports.parse = parse;
 exports.parseExpression = parseExpression;
 exports.tokTypes = types;
-//# sourceMappingURL=index.js.map
+
 });
 
 unwrapExports(lib);
@@ -22995,7 +23060,7 @@ function renderStartingTag$1 (node, context, activeInstance) {
 /**
  * 计算条件表达式的语法树的值
  * @param {context} context 抽象语法树的上下文
- * @param {Object} ast 抽象语法树
+ * @param {Object} ast
  */
 
 function calcuConditionalExpression(context, ast) {
@@ -23056,11 +23121,11 @@ function setVNodeChildrenAst(node, ast, context) {
 /**
  * 比较组件节点
  * 所有其他类型都经过 patchComponent 产生
- * ssr 推导优化通过截取 _render 函数，仅执行必要的 render 达到渲染提速的目的
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
   var ast = staticVNode.ast;
@@ -23125,9 +23190,10 @@ function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
 /**
  * 比较异步组件
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchAsyncComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
   var ast = staticVNode.ast;
@@ -23231,9 +23297,9 @@ function getResolevdNode(node, comp) {
 /**
  * 比较字符串型节点，这种节点为 ssr 特有，是模板编译器的一种渲染优化
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
  */
 function patchStringNode(staticVNode, dynamicVNode, patchContext) {
   var ast = staticVNode.ast;
@@ -23266,10 +23332,10 @@ function patchStringNode(staticVNode, dynamicVNode, patchContext) {
 /**
  * 比较元素节点
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
- * @param {ast} ast 当前渲染函数的抽象语法树
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
   if (isTrue(isRoot)) {
@@ -23317,42 +23383,29 @@ function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
 
 /**
  * 对比虚拟 dom ，收集静态节点与动态节点
- * 静态节点拼接成字符串
- * 动态节点包装成执行函数
  *
- * 注意：
- * 1. 服务端的 diff 算法，算出不同之后，并不会操作当前 dynamicVNode，因为当前的 dynamicVNode 沾染了用户数据，
- *    但是 dynamicVNode 的 parentVNode 仍然是静态节点，推导优化通过 dynamicVNode.parentVNode + 当前
- *    用户上下文 生成动态的字符串。
- * 2. 为了确保用户数据安全，所有作为字符串生成参数的 VNode ，只能用 dynamicVNode
- *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchNode(staticVNode, dynamicVNode, patchContext, isRoot) {
 
   var ast = staticVNode.ast;
 
-  // 字符串节点，这是模板引擎对ssr的一种优化
   if (staticVNode.isString && dynamicVNode.isString) {
     patchStringNode(staticVNode, dynamicVNode, patchContext);
   }
-  // 组件节点，ssr 性能瓶颈
   else if (isDef(staticVNode.componentOptions) && isDef(dynamicVNode.componentOptions)) {
     patchComponent(staticVNode, dynamicVNode, patchContext, isRoot);
   }
-  // 元素节点
   else if (isDef(staticVNode.tag) && isDef(dynamicVNode.tag)) {
     patchElement(staticVNode, dynamicVNode, patchContext, isRoot);
   }
-  // 注释节点/异步组件
   else if (isTrue(staticVNode.isComment) && isTrue(dynamicVNode.isComment)) {
-    // 异步组件
     if (isDef(staticVNode.asyncFactory) && isDef(dynamicVNode.asyncFactory)) {
       patchAsyncComponent(staticVNode, dynamicVNode, patchContext, isRoot);
     }
-    // 注释节点
     else {
       if (staticVNode.text === dynamicVNode.text) {
         ast.ssrString = "<!--" + (staticVNode.text) + "-->";
@@ -23361,7 +23414,6 @@ function patchNode(staticVNode, dynamicVNode, patchContext, isRoot) {
       patchContext.next();
     }
   }
-  // 文本节点
   else if (isDef(staticVNode.text) && isDef(dynamicVNode.text)){
     var staticText = staticVNode.raw ? staticVNode.text : escape(String(staticVNode.text));
     var dynamicText = dynamicVNode.raw ? dynamicVNode.text : escape(String(dynamicVNode.text));
@@ -23381,9 +23433,19 @@ function createPatchFunction (ref) {
   var isUnaryTag = ref.isUnaryTag;
   var cache = ref.cache;
 
+  /**
+   * 中文：
+   * VNode diff
+   * 如果检测到节点是静态的，修改的是静态组件的 ast (staticAst)
+   * 如果检测到节点是动态的
+   * staticAst 不做任何网络请求
+   * ast.ssrString 如果有值，则表示当前节点是静态节点，但不一定表示子节点是静态节点
+   * ast.ssrStatic === true，表示当前节点和子节点都是静态节点
+   * ast.unMatchedAst === true，表示当前节点没有匹配到抽象语法树，这种情况只有当节点和子节点全部都为静态，才做优化
+   */
   return function patcher (
-    staticComponent, // 静态实例
-    dynamiComponent, // 动态实例
+    staticComponent,
+    dynamiComponent,
     userContext,
     done
   ) {

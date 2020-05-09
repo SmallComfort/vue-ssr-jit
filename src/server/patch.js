@@ -151,7 +151,7 @@ function renderStartingTag (node: VNode, context: PatchContext, activeInstance: 
 /**
  * 计算条件表达式的语法树的值
  * @param {context} context 抽象语法树的上下文
- * @param {Object} ast 抽象语法树
+ * @param {Object} ast
  */
 
 function calcuConditionalExpression(context, ast) {
@@ -218,11 +218,11 @@ function setVNodeChildrenAst(node, ast, context) {
 /**
  * 比较组件节点
  * 所有其他类型都经过 patchComponent 产生
- * ssr 推导优化通过截取 _render 函数，仅执行必要的 render 达到渲染提速的目的
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
   const ast = staticVNode.ast
@@ -287,9 +287,10 @@ function patchComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
 /**
  * 比较异步组件
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchAsyncComponent(staticVNode, dynamicVNode, patchContext, isRoot) {
   const ast = staticVNode.ast
@@ -390,9 +391,9 @@ function getResolevdNode(node, comp) {
 /**
  * 比较字符串型节点，这种节点为 ssr 特有，是模板编译器的一种渲染优化
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
  */
 function patchStringNode(staticVNode, dynamicVNode, patchContext) {
   const ast = staticVNode.ast
@@ -425,10 +426,10 @@ function patchStringNode(staticVNode, dynamicVNode, patchContext) {
 /**
  * 比较元素节点
  *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
- * @param {ast} ast 当前渲染函数的抽象语法树
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
   if (isTrue(isRoot)) {
@@ -476,42 +477,29 @@ function patchElement(staticVNode, dynamicVNode, patchContext, isRoot) {
 
 /**
  * 对比虚拟 dom ，收集静态节点与动态节点
- * 静态节点拼接成字符串
- * 动态节点包装成执行函数
  *
- * 注意：
- * 1. 服务端的 diff 算法，算出不同之后，并不会操作当前 dynamicVNode，因为当前的 dynamicVNode 沾染了用户数据，
- *    但是 dynamicVNode 的 parentVNode 仍然是静态节点，推导优化通过 dynamicVNode.parentVNode + 当前
- *    用户上下文 生成动态的字符串。
- * 2. 为了确保用户数据安全，所有作为字符串生成参数的 VNode ，只能用 dynamicVNode
- *
- * @param {VNode} staticVNode 没做任何数据请求的静态虚拟 DOM
- * @param {VNode} dynamicVNode 接收首屏数据请求的动态虚拟 DOM
- * @param {PatchContext} patchContext 虚拟 DOM 上下文
+ * @param {VNode} staticVNode  VNode that didn't make any data requests.
+ * @param {VNode} dynamicVNode  VNode populated with asynchronous data
+ * @param {PatchContext} patchContext  VNode context，record patch data
+ * @param {boolean} isRoot  The root node adds the additional property SSR_ATTR
  */
 function patchNode(staticVNode, dynamicVNode, patchContext, isRoot) {
 
   const ast = staticVNode.ast
 
-  // 字符串节点，这是模板引擎对ssr的一种优化
   if (staticVNode.isString && dynamicVNode.isString) {
     patchStringNode(staticVNode, dynamicVNode, patchContext)
   }
-  // 组件节点，ssr 性能瓶颈
   else if (isDef(staticVNode.componentOptions) && isDef(dynamicVNode.componentOptions)) {
     patchComponent(staticVNode, dynamicVNode, patchContext, isRoot)
   }
-  // 元素节点
   else if (isDef(staticVNode.tag) && isDef(dynamicVNode.tag)) {
     patchElement(staticVNode, dynamicVNode, patchContext, isRoot)
   }
-  // 注释节点/异步组件
   else if (isTrue(staticVNode.isComment) && isTrue(dynamicVNode.isComment)) {
-    // 异步组件
     if (isDef(staticVNode.asyncFactory) && isDef(dynamicVNode.asyncFactory)) {
       patchAsyncComponent(staticVNode, dynamicVNode, patchContext, isRoot)
     }
-    // 注释节点
     else {
       if (staticVNode.text === dynamicVNode.text) {
         ast.ssrString = `<!--${staticVNode.text}-->`
@@ -520,7 +508,6 @@ function patchNode(staticVNode, dynamicVNode, patchContext, isRoot) {
       patchContext.next()
     }
   }
-  // 文本节点
   else if (isDef(staticVNode.text) && isDef(dynamicVNode.text)){
     const staticText = staticVNode.raw ? staticVNode.text : escape(String(staticVNode.text))
     const dynamicText = dynamicVNode.raw ? dynamicVNode.text : escape(String(dynamicVNode.text))
@@ -540,9 +527,19 @@ export function createPatchFunction ({
   isUnaryTag,
   cache
 }: RenderOptions) {
+  /**
+   * 中文：
+   * VNode diff
+   * 如果检测到节点是静态的，修改的是静态组件的 ast (staticAst)
+   * 如果检测到节点是动态的
+   * staticAst 不做任何网络请求
+   * ast.ssrString 如果有值，则表示当前节点是静态节点，但不一定表示子节点是静态节点
+   * ast.ssrStatic === true，表示当前节点和子节点都是静态节点
+   * ast.unMatchedAst === true，表示当前节点没有匹配到抽象语法树，这种情况只有当节点和子节点全部都为静态，才做优化
+   */
   return function patcher (
-    staticComponent: Component, // 静态实例
-    dynamiComponent: Component, // 动态实例
+    staticComponent: Component,
+    dynamiComponent: Component,
     userContext: ?Object,
     done: Function
   ) {
